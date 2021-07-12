@@ -12,7 +12,7 @@ pipeline {
 
     environment {
         NAME = "hms-msgbus"
-        DESCRIPTION = "Cray Kafka message bus client"
+        DESCRIPTION = "Cray HMS msgbus code."
         IS_STABLE = getBuildIsStable()
         VERSION = getDockerBuildVersion(isStable: env.IS_STABLE)
         DOCKER_ARGS = getDockerBuildArgs(name: env.NAME, description: env.DESCRIPTION)
