@@ -2,7 +2,7 @@ GO KAFKA PACKAGE USAGE
 
 Package to import:
 
-  stash.us.cray.com/HMS/hms-common/pkg/msgbus
+  github.com/Cray-HPE/hms-common/pkg/msgbus
 
 Interface:
 

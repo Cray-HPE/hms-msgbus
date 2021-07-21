@@ -35,11 +35,11 @@ FROM build-base AS base
 
 RUN go env -w GO111MODULE=auto
 
-COPY README.txt *.go $GOPATH/src/stash.us.cray.com/HMS/hms-msgbus/
-COPY vendor $GOPATH/src/stash.us.cray.com/HMS/hms-msgbus/vendor
+COPY README.txt *.go $GOPATH/src/github.com/Cray-HPE/hms-msgbus/
+COPY vendor $GOPATH/src/github.com/Cray-HPE/hms-msgbus/vendor
 
 # Now we can build.
 FROM base
 
 RUN set -ex \
-    && go build -v stash.us.cray.com/HMS/hms-msgbus/...
+    && go build -v github.com/Cray-HPE/hms-msgbus/...
