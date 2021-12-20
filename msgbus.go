@@ -24,14 +24,15 @@ package msgbus
 
 import (
 	"fmt"
-	"log"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"os"
 	"os/signal"
 	"syscall"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/sirupsen/logrus"
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -134,19 +135,24 @@ type MsgBusReader_Kafka struct {
 
 // Other bus descriptors as they arise...
 
+var logger = logrus.New()
+
 //testing stuff
 
 var __testmode bool = false
 var __read_inject string
-var __debug_level = 0
 
 
 /****************************************************************************
  *           G E N E R A L  F U N C T I O N S
  ***************************************************************************/
 
-func DebugLevel(level int) {
-	__debug_level = level
+func SetLogger(loggerP *logrus.Logger) {
+	if (loggerP != nil) {
+		logger = loggerP
+	} else {
+		logger = logrus.New()
+	}
 }
 
 /****************************************************************************
@@ -189,7 +195,7 @@ func (mbus *MsgBusWriter_Kafka) MessageWrite(msg string) error {
 	}
 
 	if (__testmode) {
-		log.Printf("TestMode: Sending message: %s",msg)
+		logger.Infof("TestMode: Sending message: %s",msg)
 		return nil
 	}
 
@@ -205,13 +211,11 @@ func (mbus *MsgBusWriter_Kafka) MessageWrite(msg string) error {
 		m := e.(*kafka.Message)
 
 		if m.TopicPartition.Error != nil {
-			log.Printf("Kafka message delivery failed: %v\n", m.TopicPartition.Error)
+			logger.Errorf("Kafka message delivery failed: %v\n", m.TopicPartition.Error)
 		} else {
-			if (__debug_level > 0) {
-				log.Printf("Delivered message to topic %s [%d] at offset %v\n",
-					*m.TopicPartition.Topic, m.TopicPartition.Partition,
-					m.TopicPartition.Offset)
-			}
+			logger.Infof("Delivered message to topic %s [%d] at offset %v\n",
+				*m.TopicPartition.Topic, m.TopicPartition.Partition,
+				m.TopicPartition.Offset)
 		}
 
 		close(deliveryChan)
@@ -275,7 +279,7 @@ func (mbus *MsgBusWriter_Kafka) UnregisterCB() error {
 /////////////////////////////////////////////////////////////////////////////
 
 func (mbus *MsgBusWriter_Kafka) MessageAvailable() int {
-	log.Printf("ERROR: MessageAvailable() not implemented for Writer interface.")
+	logger.Errorf("ERROR: MessageAvailable() not implemented for Writer interface.")
 	return 0
 }
 
@@ -391,7 +395,7 @@ func readerThread_Kafka(mbusP *MsgBusReader_Kafka) {
 		//Catch signals, and don't block
 		select {
 			case sig := <-sigchan:
-				log.Printf("Caught signal %v: terminating kafka read thread.",sig)
+				logger.Infof("Caught signal %v: terminating kafka read thread.",sig)
 				mbusP.handleLock.Lock()
 				mbusP.status = StatusClosed
 				mbusP.handleLock.Unlock()
@@ -412,9 +416,7 @@ func readerThread_Kafka(mbusP *MsgBusReader_Kafka) {
 				ok = false
 			}
 		} else {
-			if (__debug_level > 2) {
-				log.Printf("About to poll...")
-			}
+			logger.Tracef("About to poll...")
 			mbusP.handleLock.Lock()
 			if (mbusP.status != StatusClosed) {
 				//Only wait a short time, then check, to prevent un-killable
@@ -422,9 +424,7 @@ func readerThread_Kafka(mbusP *MsgBusReader_Kafka) {
 				ev = mbusP.kafkaConsumer.Poll(500)	//block until message ready
 			}
 			mbusP.handleLock.Unlock()
-			if (__debug_level > 2) {
-				log.Printf("After poll.")
-			}
+			logger.Tracef("After poll.")
 			if (ev == nil) {
 				//Poll expired, nothing to do
 				continue
@@ -435,7 +435,7 @@ func readerThread_Kafka(mbusP *MsgBusReader_Kafka) {
 					msg = string(e.Value)
 
 				case *kafka.Error:
-					log.Printf("ERROR reading from kafka consumer: %v: %v",
+					logger.Errorf("ERROR reading from kafka consumer: %v: %v",
 						e.Code(), e)
 					if (e.Code() == kafka.ErrAllBrokersDown) {
 						//lost connection, go away
@@ -443,9 +443,7 @@ func readerThread_Kafka(mbusP *MsgBusReader_Kafka) {
 					}
 
 				default:
-					if (__debug_level > 0) {
-						log.Printf("INFO: %v",e)
-					}
+					logger.Infof("Kafka poll() info: %v",e)
 			}
 		}
 
@@ -477,31 +475,29 @@ func writerThread_Kafka(mbusP *MsgBusWriter_Kafka) {
 		mbusP.handleLock.Unlock()
 		e,isOpen := <-evChan
 		if (!isOpen) {
-			log.Printf("Closing writer thread, producer event chan is closed.")
+			logger.Infof("Closing writer thread, producer event chan is closed.")
 			return
 		}
 
-		if (__debug_level > 0) {
-			log.Printf("Got writer event: %v",e)
-		}
+		logger.Tracef("Got writer event: %v",e)
 
 		switch ev := e.(type) {
 			case *kafka.Message:
 				m := ev
 				if m.TopicPartition.Error != nil {
-					log.Printf("Delivery failed: %v", m.TopicPartition.Error)
+					logger.Errorf("Kafka message delivery failed: key: '%s', topic: '%s', partition: %d, error: %v",
+						string(m.Key),
+						*m.TopicPartition.Topic,
+						m.TopicPartition.Partition,
+						m.TopicPartition.Error)
 				} else {
-					if (__debug_level > 0) {
-						log.Printf("Delivered message to topic %s [%d] at offset %v",
-							*m.TopicPartition.Topic, m.TopicPartition.Partition,
-							m.TopicPartition.Offset)
-					}
+					logger.Tracef("Kafka delivered message to topic %s [%d] at offset %v",
+						*m.TopicPartition.Topic, m.TopicPartition.Partition,
+						m.TopicPartition.Offset)
 				}
 
 			default:
-				if (__debug_level > 0) {
-					log.Printf("Ignored event: %s", ev)
-				}
+				logger.Tracef("Kafka producer: Ignored event: %s", ev)
 		}
 	}
 }
@@ -574,7 +570,7 @@ func connect_kafka_w(kbus *MsgBusWriter_Kafka) error {
 			err = nil
 		}
 		if (err != nil) {
-			log.Printf("ERROR: Unable to connect to Kafka: %v Trying again in 1 second...",
+			logger.Errorf("ERROR: Unable to connect to Kafka: %v Trying again in 1 second...",
 				err)
 			time.Sleep(1 * time.Second)
 		} else {
@@ -593,7 +589,7 @@ func connect_kafka_w(kbus *MsgBusWriter_Kafka) error {
 		go writerThread_Kafka(kbus)
 	}
 
-	log.Printf("Connected to Kafka server as Writer.")
+	logger.Printf("Connected to Confluent Kafka server as Writer.")
 	return nil
 }
 
@@ -659,7 +655,7 @@ func connect_kafka_r(kbus *MsgBusReader_Kafka) error {
 			err = nil
 		}
 		if err != nil {
-			log.Printf("ERROR: Unable to connect to Kafka: '%v' - Trying again in 1 second...", err)
+			logger.Errorf("ERROR: Unable to connect to Kafka: '%v' - Trying again in 1 second...", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -682,7 +678,7 @@ func connect_kafka_r(kbus *MsgBusReader_Kafka) error {
 
 	kbus.kafkaConsumer = consumer
 	kbus.status = StatusOpen
-	log.Printf("Connected to Confluent Kafka server as Reader.")
+	logger.Printf("Connected to Confluent Kafka server as Reader.")
 	return nil
 }
 
@@ -770,7 +766,7 @@ func Connect(cfg MsgBusConfig) (MsgBusIO, error) {
 		return badbus, err
 	}
 
-	log.Printf("Message bus connect, kafka, confluent interface.")
+	logger.Printf("Message bus connect, kafka, confluent interface.")
 
 	if bcfg.ConnectRetries == 0 {
 		bcfg.ConnectRetries = 1000000 //retry "forever"

@@ -25,6 +25,7 @@ package msgbus
 import (
 	"testing"
 	"time"
+	"github.com/sirupsen/logrus"
 )
 
 const CBFUNC_TEST_MSG = "CB Function Test Message"
@@ -77,6 +78,15 @@ func TestConnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	//Quick logger test
+
+	t.Log("Should see 'TestMode: Sending message'")
+	mbusW.MessageWrite("the rain in spain")
+	locLogger := logrus.New()
+	SetLogger(locLogger)
+	t.Log("Should see 'TestMode: Sending message' again")
+	mbusW.MessageWrite("falls mainly on the plain")
 
 	mbusW.Disconnect()
 
@@ -255,6 +265,8 @@ func TestConnect(t *testing.T) {
 	if merr == nil {
 		t.Fatal("ERROR: reader allowed MessageWrite(), shouldn't have.")
 	}
+
 	mbusR.Disconnect()
 
 }
+
