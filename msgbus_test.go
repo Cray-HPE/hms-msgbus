@@ -25,6 +25,7 @@ package msgbus
 import (
 	"testing"
 	"time"
+	"github.com/sirupsen/logrus"
 )
 
 const CBFUNC_TEST_MSG = "CB Function Test Message"
@@ -77,6 +78,15 @@ func TestConnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	//Quick logger test
+
+	t.Log("Should see 'TestMode: Sending message'")
+	mbusW.MessageWrite("the rain in spain")
+	locLogger := logrus.New()
+	SetLogger(locLogger)
+	t.Log("Should see 'TestMode: Sending message' again")
+	mbusW.MessageWrite("falls mainly on the plain")
 
 	mbusW.Disconnect()
 
@@ -203,58 +213,6 @@ func TestConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//Connect in non-test mode, connections will fail.
-
-	t.Logf("** Testing NonBlocking Writer Bus Connection Failures **\n")
-	__testmode = false
-	mcfg.BusTech = BusTechKafka
-	mcfg.Host = "localhost"
-	mcfg.Port = 9092
-	mcfg.Blocking = Blocking
-	mcfg.Direction = BusWriter
-	mcfg.ConnectRetries = 2
-	mcfg.Topic = "hb_events_wb"
-
-	mbusW, err = Connect(mcfg)
-	if err == nil {
-		t.Fatal("ERROR, message bus connected, nobody home!")
-	}
-
-	t.Logf("** Testing Blocking Writer Bus Connection Failures **\n")
-	mcfg.Blocking = Blocking
-	mbusW, err = Connect(mcfg)
-	if err == nil {
-		t.Fatal("ERROR, message bus connected, nobody home!")
-	}
-
-	t.Logf("** Testing Blocking Reader Bus Connection Failures **\n")
-	mcfg.BusTech = BusTechKafka
-	mcfg.Host = "localhost"
-	mcfg.Port = 9092
-	mcfg.Blocking = Blocking
-	mcfg.Direction = BusReader
-	mcfg.ConnectRetries = 2
-	mcfg.Topic = "hb_events_rb"
-
-	mbusR, err = Connect(mcfg)
-	if err == nil {
-		t.Fatal("ERROR, message bus connected, nobody home!")
-	}
-
-	t.Logf("** Testing NonBlocking Reader Bus Connection Failures **\n")
-	mcfg.BusTech = BusTechKafka
-	mcfg.Host = "localhost"
-	mcfg.Port = 9092
-	mcfg.Blocking = NonBlocking
-	mcfg.Direction = BusReader
-	mcfg.ConnectRetries = 2
-	mcfg.Topic = "hb_events_rb"
-
-	mbusR, err = Connect(mcfg)
-	if err == nil {
-		t.Fatal("ERROR, message bus connected, nobody home!")
-	}
-
 	//Call all of the "illegal" functions, insure they fail.
 
 	t.Logf("** Testing illegal writer functions **\n")
@@ -307,6 +265,8 @@ func TestConnect(t *testing.T) {
 	if merr == nil {
 		t.Fatal("ERROR: reader allowed MessageWrite(), shouldn't have.")
 	}
+
 	mbusR.Disconnect()
 
 }
+
